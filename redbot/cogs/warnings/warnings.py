@@ -208,6 +208,8 @@ class Warnings(commands.Cog):
         """
         guild = ctx.guild
 
+        if len(name) > 2000:
+            return await ctx.send(_("The name's length cannot be 2000 characters or longer."))
         exceed_command = await get_command_for_exceeded_points(ctx)
         drop_command = await get_command_for_dropping_points(ctx)
 
@@ -236,6 +238,10 @@ class Warnings(commands.Cog):
     @commands.guild_only()
     async def action_del(self, ctx: commands.Context, action_name: str):
         """Delete the action with the specified name."""
+        if len(action_name) > 2000:
+            return await ctx.send(
+                _("There cannot be an action who's name's length is 2000 characters or longer.")
+            )
         guild = ctx.guild
         guild_settings = self.config.guild(guild)
         async with guild_settings.actions() as registered_actions:
@@ -271,6 +277,12 @@ class Warnings(commands.Cog):
         if name.lower() == "custom":
             await ctx.send(_("*Custom* cannot be used as a reason name!"))
             return
+        if any([len(x) > 2000] for x in (name, description)):
+            return await ctx.send(
+                _(
+                    "You cannot have a description or name who's length is 2000 characters or longer."
+                )
+            )
         to_add = {"points": points, "description": description}
         completed = {name.lower(): to_add}
 
@@ -285,6 +297,10 @@ class Warnings(commands.Cog):
     @commands.guild_only()
     async def reason_del(self, ctx: commands.Context, reason_name: str):
         """Delete a warning reason."""
+        if len(reason_name) > 2000:
+            return await ctx.send(
+                _("There cannot be a reason who's name's length is 2000 characters or longer.")
+            )
         guild = ctx.guild
         guild_settings = self.config.guild(guild)
         async with guild_settings.reasons() as registered_reasons:
@@ -397,6 +413,10 @@ class Warnings(commands.Cog):
                 if custom_allowed:
                     if points <= 0:
                         return await ctx.send(_("You cannot apply 0 or less points."))
+                    elif len(reason) > 2048:
+                        return await ctx.send(
+                            _("The length of the reason must be under 2048 characters long.")
+                        )
                     reason_type = {"description": reason, "points": points}
                 else:
                     # logic taken from `[p]permissions canrun`
@@ -600,6 +620,9 @@ class Warnings(commands.Cog):
         reason: str = None,
     ):
         """Remove a warning from a user."""
+
+        if len(reason) > 2000:
+            return await ctx.send(_("There cannot be a warning that exceeds 2000 characters."))
 
         guild = ctx.guild
 

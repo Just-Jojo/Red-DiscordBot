@@ -356,6 +356,8 @@ class CustomCommands(commands.Cog):
         if command in (*self.bot.all_commands, *commands.RESERVED_COMMAND_NAMES):
             await ctx.send(_("There already exists a bot command with the same name."))
             return
+        if len(command) > 2000:
+            await ctx.send(_("Command's name's length cannot be 2000 characters or longer."))
         responses = await self.commandobj.get_responses(ctx=ctx)
         if not responses:
             await ctx.send(_("Custom command process cancelled."))
@@ -389,6 +391,12 @@ class CustomCommands(commands.Cog):
             return
         if command in (*self.bot.all_commands, *commands.RESERVED_COMMAND_NAMES):
             await ctx.send(_("There already exists a bot command with the same name."))
+            return
+        if len(command) > 2000:
+            await ctx.send(_("The command's name cannot exceed 2000 characters."))
+            return
+        elif len(text) > 2000:
+            await ctx.send(_("The command's output cannot exceed 2000 characters."))
             return
         try:
             await self.commandobj.create(ctx=ctx, command=command, response=text)

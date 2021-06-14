@@ -226,6 +226,8 @@ class ModLog(commands.Cog):
 
         If no case number is specified, the latest case will be used.
         """
+        if len(reason) > 2000:
+            await ctx.send(_("The reason cannot exceed 2000 characters."))
         author = ctx.author
         guild = ctx.guild
         if case is None:

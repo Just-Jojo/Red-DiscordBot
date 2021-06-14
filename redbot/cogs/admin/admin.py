@@ -300,6 +300,8 @@ class Admin(commands.Cog):
         Example:
             `[p]editrole name \"The Transistor\" Test`
         """
+        if len(name) > 100:
+            await ctx.send(_("The role name cannot exceed 100 characters."))
         author = ctx.message.author
         old_name = role.name
         reason = "{}({}) changed the name of role '{}' to '{}'".format(
@@ -327,6 +329,9 @@ class Admin(commands.Cog):
     @checks.is_owner()
     async def announce(self, ctx: commands.Context, *, message: str):
         """Announce a message to all servers the bot is in."""
+        if len(message) > 2000:
+            await ctx.send(_("The message's length cannot exceed 2000 characters."))
+            return  # TODO Length or keep the same?
         if not self.is_announcing():
             announcer = Announcer(ctx, message, config=self.config)
             announcer.start()

@@ -243,6 +243,10 @@ class Reports(commands.Cog):
         Use without arguments for interactive reporting, or do
         `[p]report [text]` to use it non-interactively.
         """
+        if len(_report) > 2000:
+            return await ctx.send(
+                _("You cannot send a report who's length is 2000 characters or longer.")
+            )
         author = ctx.author
         guild = ctx.guild
         if guild is None:
@@ -357,7 +361,15 @@ class Reports(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
-
+        # Unfortunately the best way to handle an extra long message (until discord
+        # allows bots to send 4k+ messages) is to return early instead of sending the message
+        if len(message.content) > 2000:
+            await message.channel.send(
+                _(
+                    "Your message could not be delivered as its length is over 2000 characters long."
+                )
+            )
+            return []
         to_remove = []
 
         for k, v in self.tunnel_store.items():

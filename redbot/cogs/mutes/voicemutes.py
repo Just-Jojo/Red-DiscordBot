@@ -90,6 +90,10 @@ class VoiceMutes(MixinMeta):
             return await ctx.send(_("You cannot mute me."))
         if ctx.author in users:
             return await ctx.send(_("You cannot mute yourself."))
+        duration = time_and_reason.get("duration", None)
+        reason = time_and_reason.get("reason", None)
+        if len(reason) > 2000:
+            return await ctx.send(_("The reason cannot exceed 2000 characters."))
         async with ctx.typing():
             success_list = []
             issue_list = []
@@ -101,8 +105,6 @@ class VoiceMutes(MixinMeta):
                 if not can_move:
                     issue_list.append((user, perm_reason))
                     continue
-                duration = time_and_reason.get("duration", None)
-                reason = time_and_reason.get("reason", None)
                 time = ""
                 until = None
                 if duration:

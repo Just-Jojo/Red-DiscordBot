@@ -3382,6 +3382,9 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
         **Arguments:**
             - `[message]` - The message to send to the owner.
         """
+        if len(message) > 2048:  # Max char limit of an embed description
+            await ctx.send(_("Your message cannot exceed 2048 characters."))
+            return
         guild = ctx.message.guild
         author = ctx.message.author
         footer = _("User ID: {}").format(author.id)
@@ -3502,6 +3505,9 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
                     "a server with."
                 )
             )
+            return
+        elif len(message) > 2048:
+            await ctx.send(_("Your message cannot exceed 2048 characters."))
             return
 
         prefixes = await ctx.bot.get_valid_prefixes()

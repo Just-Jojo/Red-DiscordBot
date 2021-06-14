@@ -104,6 +104,9 @@ class Bank(commands.Cog):
     @bankset.command(name="bankname")
     async def bankset_bankname(self, ctx: commands.Context, *, name: str):
         """Set the bank's name."""
+        if len(name) > 30:
+            await ctx.send(_("The bank name cannot exceed 30 characters."))
+            return
         await bank.set_bank_name(name, ctx.guild)
         await ctx.send(_("Bank name has been set to: {name}").format(name=name))
 
@@ -112,6 +115,9 @@ class Bank(commands.Cog):
     @bankset.command(name="creditsname")
     async def bankset_creditsname(self, ctx: commands.Context, *, name: str):
         """Set the name for the bank's currency."""
+        if len(name) > 30:
+            await ctx.send(_("The credit's name cannot exceed 30 characters"))
+            return
         await bank.set_currency_name(name, ctx.guild)
         await ctx.send(_("Currency name has been set to: {name}").format(name=name))
 

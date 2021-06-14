@@ -127,6 +127,8 @@ class KickBanMixin(MixinMeta):
         guild = ctx.guild
 
         removed_temp = False
+        if len(reason) > 2000:
+            return False, _("The reason cannot exceed 2000 characters.")
 
         if not (0 <= days <= 7):
             return False, _("Invalid days. Must be between 0 and 7.")
@@ -325,6 +327,8 @@ class KickBanMixin(MixinMeta):
         elif ctx.guild.me.top_role <= member.top_role or member == ctx.guild.owner:
             await ctx.send(_("I cannot do that due to Discord hierarchy rules."))
             return
+        elif len(reason) > 2000:
+            await ctx.send(_("The reason cannot exceed 2000 characters."))
         audit_reason = get_audit_reason(author, reason, shorten=True)
         toggle = await self.config.guild(guild).dm_on_kickban()
         if toggle:
@@ -425,6 +429,8 @@ class KickBanMixin(MixinMeta):
         User IDs need to be provided in order to ban
         using this command.
         """
+        if len(reason) > 2000:
+            return await ctx.send(_("The reason cannot exceed 2000 characters."))
         banned = []
         errors = {}
         upgrades = []
@@ -599,6 +605,8 @@ class KickBanMixin(MixinMeta):
            - `[p]tempban 428675506947227648 1d2h15m 5 Evil person`
             This will ban the user for 1 day 2 hours 15 minutes and will delete the last 5 days of their messages.
         """
+        if len(reason) > 2000:
+            return await ctx.send(_("The reason cannot exceed 2000 characters."))
         guild = ctx.guild
         author = ctx.author
 
@@ -676,6 +684,8 @@ class KickBanMixin(MixinMeta):
     @checks.admin_or_permissions(ban_members=True)
     async def softban(self, ctx: commands.Context, member: discord.Member, *, reason: str = None):
         """Kick a user and delete 1 day's worth of their messages."""
+        if len(reason) > 2000:
+            return await ctx.send(_("The reason cannot exceed 2000 characters."))
         guild = ctx.guild
         author = ctx.author
 
@@ -760,6 +770,8 @@ class KickBanMixin(MixinMeta):
         self, ctx: commands.Context, member: discord.Member, *, reason: str = None
     ):
         """Kick a member from a voice channel."""
+        if len(reason) > 2000:
+            return await ctx.send(_("The reason cannot exceed 2000 characters."))
         author = ctx.author
         guild = ctx.guild
         user_voice_state: discord.VoiceState = member.voice
@@ -806,6 +818,8 @@ class KickBanMixin(MixinMeta):
         self, ctx: commands.Context, member: discord.Member, *, reason: str = None
     ):
         """Unban a user from speaking and listening in the server's voice channels."""
+        if len(reason) > 2000:
+            return await ctx.send(_("The reason cannot exceed 2000 characters."))
         user_voice_state = member.voice
         if (
             await self._voice_perm_check(
@@ -847,6 +861,8 @@ class KickBanMixin(MixinMeta):
     @checks.admin_or_permissions(mute_members=True, deafen_members=True)
     async def voiceban(self, ctx: commands.Context, member: discord.Member, *, reason: str = None):
         """Ban a user from speaking and listening in the server's voice channels."""
+        if len(reason) > 2000:
+            return await ctx.send(_("The reason cannot exceed 2000 characters."))
         user_voice_state: discord.VoiceState = member.voice
         if (
             await self._voice_perm_check(
@@ -894,6 +910,8 @@ class KickBanMixin(MixinMeta):
          1. Copy it from the mod log case (if one was created), or
          2. enable developer mode, go to Bans in this server's settings, right-
         click the user and select 'Copy ID'."""
+        if len(reason) > 2000:
+            return await ctx.send(_("The reason cannot exceed 2000 characters."))
         guild = ctx.guild
         author = ctx.author
         audit_reason = get_audit_reason(ctx.author, reason, shorten=True)

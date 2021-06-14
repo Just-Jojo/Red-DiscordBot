@@ -226,6 +226,9 @@ class Alias(commands.Cog):
     async def _add_alias(self, ctx: commands.Context, alias_name: str, *, command):
         """Add an alias for a command."""
         # region Alias Add Validity Checking
+        if len(alias_name) > 2000:
+            await ctx.send(_("Alias names cannot exceed 2000 characters."))
+            return
         is_command = self.is_command(alias_name)
         if is_command:
             await ctx.send(
@@ -353,13 +356,25 @@ class Alias(commands.Cog):
         alias = await self._aliases.get_alias(ctx.guild, alias_name)
 
         if alias:
-            await ctx.send(
-                _("The `{alias_name}` alias will execute the command `{command}`").format(
-                    alias_name=alias_name, command=alias.command
-                )
+            msg = _("The `{alias_name}` alias will execute the command `{command}`").format(
+                alias_name=alias_name, command=alias.command
             )
+            if len(msg) > 2000:
+                for page in pagify(msg):
+                    await ctx.send(page)
+            else:
+                await ctx.send(
+                    _("The `{alias_name}` alias will execute the command `{command}`").format(
+                        alias_name=alias_name, command=alias.command
+                    )
+                )
         else:
-            await ctx.send(_("There is no alias with the name `{name}`").format(name=alias_name))
+            msg = _("There is no alias with the name `{name}`").format(name=alias_name)
+            if len(msg) > 2000:
+                for page in pagify(msg):
+                    await ctx.send(page)
+            else:
+                await ctx.send(msg)
 
     @checks.mod_or_permissions(manage_guild=True)
     @alias.command(name="delete", aliases=["del", "remove"])
@@ -370,12 +385,24 @@ class Alias(commands.Cog):
             await ctx.send(_("There are no aliases on this server."))
             return
 
+        # Instead of refusing to delete aliases with names longer than 2000 characters
+        # just try/except with formatting names and then just vaguley saying it was deleted.
         if await self._aliases.delete_alias(ctx, alias_name):
-            await ctx.send(
-                _("Alias with the name `{name}` was successfully deleted.").format(name=alias_name)
-            )
+            try:
+                await ctx.send(
+                    _("Alias with the name `{name}` was successfully deleted.").format(
+                        name=alias_name
+                    )
+                )
+            except discord.HTTPException:
+                await ctx.send(_("Alias with that name was successfully deleted."))
         else:
-            await ctx.send(_("Alias with name `{name}` was not found.").format(name=alias_name))
+            try:
+                await ctx.send(
+                    _("Alias with name `{name}` was not found.").format(name=alias_name)
+                )
+            except discord.HTTPException:
+                await ctx.send(_("Alias with that name was not found."))
 
     @checks.is_owner()
     @global_.command(name="delete", aliases=["del", "remove"])
@@ -386,11 +413,21 @@ class Alias(commands.Cog):
             return
 
         if await self._aliases.delete_alias(ctx, alias_name, global_=True):
-            await ctx.send(
-                _("Alias with the name `{name}` was successfully deleted.").format(name=alias_name)
-            )
+            try:
+                await ctx.send(
+                    _("Alias with the name `{name}` was successfully deleted.").format(
+                        name=alias_name
+                    )
+                )
+            except discord.Forbidden:
+                await ctx.send(_("Alias with that name was successfully deleted."))
         else:
-            await ctx.send(_("Alias with name `{name}` was not found.").format(name=alias_name))
+            try:
+                await ctx.send(
+                    _("Alias with name `{name}` was not found.").format(name=alias_name)
+                )
+            except discord.Forbidden:
+                await ctx.send(_("Alias with that name was not found."))
 
     @alias.command(name="list")
     @commands.guild_only()

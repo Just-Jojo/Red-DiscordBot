@@ -15,6 +15,7 @@ from redbot.core.utils.chat_formatting import (
     italics,
     humanize_number,
     humanize_timedelta,
+    pagify,
 )
 
 _ = T_ = Translator("General", __file__)
@@ -93,7 +94,13 @@ class General(commands.Cog):
         if len(choices) < 2:
             await ctx.send(_("Not enough options to pick from."))
         else:
-            await ctx.send(choice(choices))
+            # Rather safe than sorry
+            result = choice(choices)
+            if len(result) > 2000:
+                for page in pagify(choices):
+                    await ctx.send(page)
+            else:
+                await ctx.send(result)
 
     @commands.command()
     async def roll(self, ctx, number: int = 100):

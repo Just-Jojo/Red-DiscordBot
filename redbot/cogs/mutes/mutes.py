@@ -899,6 +899,8 @@ class Mutes(VoiceMutes, commands.Cog, metaclass=CompositeMetaClass):
                     "create a new one."
                 ).format(command=command)
             )
+        if len(name) > 100:
+            return await ctx.send(_("The muted role name length cannot exceed 100 characters"))
         async with ctx.typing():
             perms = discord.Permissions()
             perms.update(send_messages=False, speak=False, add_reactions=False)
@@ -1142,9 +1144,11 @@ class Mutes(VoiceMutes, commands.Cog, metaclass=CompositeMetaClass):
 
         if not await self._check_for_mute_role(ctx):
             return
+        duration = time_and_reason.get("duration", None)
+        reason = time_and_reason.get("reason", None)
+        if len(reason) > 2000:
+            return await ctx.send(_("The reason cannot exceed 2000 characters."))
         async with ctx.typing():
-            duration = time_and_reason.get("duration", None)
-            reason = time_and_reason.get("reason", None)
             time = ""
             until = None
             if duration:
@@ -1288,9 +1292,11 @@ class Mutes(VoiceMutes, commands.Cog, metaclass=CompositeMetaClass):
             return await ctx.send(_("You cannot mute me."))
         if ctx.author in users:
             return await ctx.send(_("You cannot mute yourself."))
+        duration = time_and_reason.get("duration", None)
+        reason = time_and_reason.get("reason", None)
+        if len(reason) > 2000:
+            return await ctx.send(_("The reason cannot exceed 2000 characters."))
         async with ctx.typing():
-            duration = time_and_reason.get("duration", None)
-            reason = time_and_reason.get("reason", None)
             time = ""
             until = None
             if duration:
@@ -1371,6 +1377,8 @@ class Mutes(VoiceMutes, commands.Cog, metaclass=CompositeMetaClass):
             return await ctx.send(_("You cannot unmute yourself."))
         if not await self._check_for_mute_role(ctx):
             return
+        if len(reason) > 2000:
+            return await ctx.send(_("The reason cannot exceed 2000 characters."))
         async with ctx.typing():
             guild = ctx.guild
             author = ctx.author
@@ -1438,6 +1446,8 @@ class Mutes(VoiceMutes, commands.Cog, metaclass=CompositeMetaClass):
             return await ctx.send(_("You cannot unmute me."))
         if ctx.author in users:
             return await ctx.send(_("You cannot unmute yourself."))
+        if len(reason) > 2000:
+            return await ctx.send(_("The reason cannot exceed 2000 characters."))
         async with ctx.typing():
             channel = ctx.channel
             author = ctx.author
