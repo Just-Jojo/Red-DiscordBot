@@ -21,7 +21,7 @@ from redbot.core import data_manager
 from redbot.core.utils.menus import menu, DEFAULT_CONTROLS
 from redbot.core.commands import GuildConverter
 from string import ascii_letters, digits
-from typing import TYPE_CHECKING, Union, Tuple, List, Optional, Iterable, Sequence, Dict, Set
+from typing import TYPE_CHECKING, Any, Union, Tuple, List, Optional, Iterable, Sequence, Dict, Set
 
 import aiohttp
 import discord
@@ -406,10 +406,41 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
         """ Nothing to delete (Core Config is handled in a bot method ) """
         return
 
-    @commands.command(hidden=True)
+    @commands.command(hidden=True, aliases=("ding",))
     async def ping(self, ctx: commands.Context):
         """Pong."""
-        await ctx.send("Pong.")
+        invoked = ctx.invoked_with == "ping"
+        msg = "Pong." if invoked else "Dong."
+        if not await ctx.embed_requested():
+            return await ctx.send(msg)
+        ping_ding = "Ping/Pong" if invoked else "Ding/Dong"
+        embed = discord.Embed(
+            title=ping_ding,
+            description=msg,
+            timestamp=datetime.datetime.utcnow(),
+            colour=await ctx.embed_colour(),
+        )
+        await ctx.send(embed=embed)
+
+    @commands.command()
+    @commands.is_owner()
+    @commands.check(lambda c: c.bot.get_cog("Downloader") is not None)
+    async def unusedrepos(self, ctx):
+        repo_cog = self.bot.get_cog("Downloader")
+        repos = [r.name for r in repo_cog._repo_manager.repos]
+        active_repos = {c.repo_name for c in await repo_cog.installed_cogs()}
+        fails = []
+        for r in active_repos:
+            try:
+                repos.remove(r)
+            except ValueError:
+                fails.append(r)
+        if "MISSING_REPO" in fails:
+            fails.remove("MISSING_REPO")
+        msg = "**Unused repos:\n**" + ", ".join(repos)
+        if fails:
+            msg += "\n**Failed repos:**\n" + ", ".join(fails)
+        await ctx.maybe_send_embed(msg)
 
     @commands.command()
     async def info(self, ctx: commands.Context):
@@ -433,10 +464,13 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
             owner = app_info.team.name
         else:
             owner = app_info.owner
-        custom_info = await self.bot._config.custom_info()
+        custom_info = (
+            "Jojobot is a custom fork of Red made by Jojo#7791. "
+            "Jojobot (aka Philip Mumford) is a bot created by "
+            "Jojo for... reasons? idk why he does these things"
+        )
 
         pypi_version, py_version_req = await fetch_latest_red_version_info()
-        outdated = pypi_version and pypi_version > red_version_info
 
         if embed_links:
             dpy_version = "[{}]({})".format(discord.__version__, dpy_repo)
@@ -460,14 +494,6 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
             embed.add_field(name="Python", value=python_version)
             embed.add_field(name="discord.py", value=dpy_version)
             embed.add_field(name=_("Red version"), value=red_version)
-            if outdated in (True, None):
-                if outdated is True:
-                    outdated_value = _("Yes, {version} is available.").format(
-                        version=str(pypi_version)
-                    )
-                else:
-                    outdated_value = _("Checking for updates failed.")
-                embed.add_field(name=_("Outdated"), value=outdated_value)
             if custom_info:
                 embed.add_field(name=_("About this instance"), value=custom_info, inline=False)
             embed.add_field(name=_("About Red"), value=about, inline=False)
@@ -515,15 +541,6 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
                     dpy_version=dpy_version,
                     red_version=red_version,
                 )
-
-            if outdated in (True, None):
-                if outdated is True:
-                    outdated_value = _("Yes, {version} is available.").format(
-                        version=str(pypi_version)
-                    )
-                else:
-                    outdated_value = _("Checking for updates failed.")
-                extras += _("Outdated:          [{state}]\n").format(state=outdated_value)
 
             red = (
                 _("**About Red**\n")
@@ -1488,7 +1505,6 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
             await ctx.send(_("No exception has occurred yet."))
 
     @commands.command()
-    @commands.check(CoreLogic._can_get_invite_url)
     async def invite(self, ctx):
         """Shows [botname]'s invite url.
 
@@ -1499,13 +1515,26 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
         **Example:**
             - `[p]invite`
         """
-        try:
-            await ctx.author.send(await self._invite_url())
-        except discord.errors.Forbidden:
-            await ctx.send(
-                "I couldn't send the invite message to you in DM. "
-                "Either you blocked me or you disabled DMs in this server."
+        public = await self.bot._config.invite_public()
+        channel = ctx.author
+        if public:
+            channel = ctx.channel
+        invite = await self._invite_url()
+        kwargs = {"content": f"Here is Jojobot's invite: {invite}"}
+        if await ctx.embed_requested():
+            embed = discord.Embed(
+                title="Jojobot invte",
+                description=f"Here is [Jojobot's invite]({invite}) url",
+                colour=await ctx.embed_colour(),
+                timestamp=datetime.datetime.utcnow()
             )
+            embed.set_thumbnail(url=ctx.me.avatar_url)
+            embed.add_field(name="Here is a link if you're on mobile", value=invite)
+            kwargs = {"embed": embed}
+        try:
+            await channel.send(**kwargs)
+        except discord.Forbidden:
+            await ctx.send("I could not send that to you. Please make sure I can dm you.")
 
     @commands.group()
     @checks.is_owner()
@@ -2057,6 +2086,19 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
         )
         for page in pagify(settings):
             await ctx.send(box(page))
+
+    @_set.command()
+    @commands.is_owner()
+    async def dmchannel(self, ctx: commands.Context, channel: discord.TextChannel = None):
+        """Set the dm log channel.
+        
+        This will log dms sent by users"""
+        if not channel:
+            await ctx.send("Okay. I have reset the dm log channel.")
+            await self.bot._config.dm_log_channel.clear()
+        else:
+            await ctx.send(f"The dm log channel is now set to `{channel.name}`")
+            await self.bot._config.dm_log_channel.set(channel.id)
 
     @checks.guildowner_or_permissions(administrator=True)
     @_set.command(name="deletedelay")
@@ -4891,3 +4933,52 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
         )
         await ctx.send(message)
         # We need a link which contains a thank you to other projects which we use at some point.
+
+    @commands.Cog.listener()
+    async def on_message(self, msg: discord.Message):
+        if msg.author.bot:
+            return
+        bot_id = re.compile(rf"^<@!?{self.bot.user.id}>$")
+        if re.match(bot_id, msg.content):
+            prefixes = set(await self.bot.get_valid_prefixes(msg.guild))
+            for maybe in (f"<@{self.bot.user.id}>", f"<@!{self.bot.user.id}>"):
+                if maybe in prefixes:
+                    prefixes.remove(maybe)
+                    prefixes.add(f"@{self.bot.user.name}")
+                elif (maybe := f"{maybe} ") in prefixes:
+                    prefixes.remove(maybe)
+                    prefixes.add(f"@{self.bot.user.name} ")
+            prefixes = list(prefixes)
+            help_prefix = prefixes[0]
+            plural = "es" if len(prefixes) > 1 else ""
+            is_are = "are" if len(prefixes) > 1 else "is"
+            prefixes = ", ".join(f"`{prefix}`" for prefix in prefixes)
+            return await msg.reply(
+                f"Hallo there! I'm Jojobot!\nMy prefix{plural} {is_are} {prefixes}!"
+                f"\nWhy don't you use `{help_prefix}help` to see what I can do?"
+            )
+        if not msg.guild:
+            allowed = await self.bot.allowed_by_whitelist_blacklist(msg.author)
+            if not allowed:
+                await msg.reply(
+                    "You are blacklisted from Jojobot. "
+                    "You may appeal here but Jojo (the owner) can ignore you if he so wishes."
+                )
+            fake_context = await self.bot.get_context(msg)
+            if fake_context.command and allowed:
+                return
+            del fake_context
+            maybe_channel = await self.bot._config.dm_log_channel()
+            if not maybe_channel or not (channel := self.bot.get_channel(maybe_channel)):
+                return
+            title = f"Dm from {msg.author} ({msg.author.id})"
+            kwargs = {"content": f"**{title}**\n{msg.content}"}
+            if await self.bot.embed_requested(channel, msg.author):
+                embed = discord.Embed(
+                    title=title, description=msg.content,
+                    colour=await self.bot.get_embed_colour(channel)
+                )
+                embed.set_author(name=msg.author.name, icon_url=msg.author.avatar_url)
+                embed.timestamp = datetime.datetime.utcnow()
+                kwargs = {"embed": embed}
+            await channel.send(**kwargs)
