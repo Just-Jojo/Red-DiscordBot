@@ -200,8 +200,6 @@ class Red(
         # This keeps track of owners with elevated privileges in the different contexts.
         # This is `None` if sudo functionality is disabled.
         self._sudo_ctx_var: Optional[ContextVar] = None
-        if cli_flags.enable_sudo:
-            self._sudo_ctx_var = ContextVar("SudoOwners")
 
         if "owner_id" in kwargs:
             raise RuntimeError("Red doesn't accept owner_id kwarg, use owner_ids instead.")
@@ -251,6 +249,9 @@ class Red(
 
         super().__init__(*args, help_command=None, **kwargs)
 
+        # Turns out that draper was smart
+        if cli_flags.enable_sudo:
+            self._sudo_ctx_var = ContextVar("SudoOwners")
         # Do not manually use the help formatter attribute here, see `send_help_for`,
         # for a documented API. The internals of this object are still subject to change.
         self._help_formatter = commands.help.RedHelpFormatter()
