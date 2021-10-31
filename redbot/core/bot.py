@@ -217,6 +217,7 @@ class Red(
         if "owner_ids" in kwargs:
             self._all_owner_ids = frozenset(kwargs.pop("owner_ids"))
         self._all_owner_ids = self._all_owner_ids.union(cli_flags.co_owner)
+        self._elevated_owner_ids = self._all_owner_ids
 
         # ensure that d.py doesn't run into AttributeError when trying to set `self.owner_ids`
         # See documentation of `owner_ids`'s setter for more information.

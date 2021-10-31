@@ -4998,17 +4998,14 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
 
         SU permission is auto removed after interval set with `[p]set sutimeout` (Default to 15 minutes).
         """
-        if ctx.author.id not in self.bot.owner_ids:
-            self.bot._elevated_owner_ids |= {ctx.author.id}
-            await ctx.send(_("Your bot owner privileges have been enabled."))
-            if ctx.author.id in self.bot._owner_sudo_tasks:
-                self.bot._owner_sudo_tasks[ctx.author.id].cancel()
-                del self.bot._owner_sudo_tasks[ctx.author.id]
-            self.bot._owner_sudo_tasks[ctx.author.id] = asyncio.create_task(
-                timed_unsu(ctx.author.id, self.bot)
-            )
+        if ctx.author.id in self.bot.owner_ids:
+            await ctx.send(_("Your bot owner privileges are already enabled."))
             return
-        await ctx.send(_("Your bot owner privileges are already enabled."))
+        self.bot._elevated_owner_ids |= {ctx.author.id}
+        await ctx.send(_("Your bot owner privileges have been enabled."))
+        if ctx.author.id in self.bot._owner_sudo_tasks:
+            self.bot._owner_sudo_tasks[ctx.author.id].cancel()
+            del self.bot._owner_sudo_tasks[ctx.author.id]
 
     @commands.command(
         cls=commands.commands._IsTrueBotOwner,
@@ -5016,11 +5013,11 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
     )
     async def unsu(self, ctx: commands.Context):
         """Disable your bot owner privileges."""
-        if ctx.author.id in self.bot.owner_ids:
-            self.bot._elevated_owner_ids -= {ctx.author.id}
-            await ctx.send(_("Your bot owner privileges have been disabled."))
+        if ctx.author.id not in self.bot.owner_ids:
+            await ctx.send(_("Your bot owner privileges are not currently enabled."))
             return
-        await ctx.send(_("Your bot owner privileges are not currently enabled."))
+        self.bot._elevated_owner_ids -= {ctx.author.id}
+        await ctx.send(_("Your bot owner privileges have been disabled."))
 
     @commands.command(
         cls=commands.commands._IsTrueBotOwner,
