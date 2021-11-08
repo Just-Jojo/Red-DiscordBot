@@ -26,14 +26,10 @@ class MiscellaneousCommands(MixinMeta, metaclass=CompositeMetaClass):
     @commands.guild_only()
     @commands.bot_has_permissions(embed_links=True)
     async def command_sing(self, ctx: commands.Context):
-        """Make Red sing one of her songs."""
+        """Make Alastor sing one of his songs."""
         ids = (
-            "zGTkAVsrfg8",
-            "cGMWL8cOeAU",
-            "vFrjMq4aL-g",
-            "WROI5WYBU_A",
-            "41tIUr_ex3g",
-            "f9O2Rjn1azc",
+            "juJkNKodgdE",
+            "wH50pCm6MeM",
         )
         url = f"https://www.youtube.com/watch?v={random.choice(ids)}"
         await ctx.invoke(self.command_play, query=url)
