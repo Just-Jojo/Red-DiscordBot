@@ -2176,19 +2176,6 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
             )
         )
 
-    @_set.command()
-    @commands.is_owner()
-    async def dmchannel(self, ctx: commands.Context, channel: discord.TextChannel = None):
-        """Set the dm log channel.
-
-        This will log dms sent by users"""
-        if not channel:
-            await ctx.send("Okay. I have reset the dm log channel.")
-            await self.bot._config.dm_log_channel.clear()
-        else:
-            await ctx.send(f"The dm log channel is now set to `{channel.name}`")
-            await self.bot._config.dm_log_channel.set(channel.id)
-
     @bank.is_owner_if_bank_global()
     @checks.guildowner_or_permissions(administrator=True)
     @bankset.command(name="reset")
@@ -2430,6 +2417,19 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
     @commands.group(name="set")
     async def _set(self, ctx: commands.Context):
         """Commands for changing [botname]'s settings."""
+
+    @_set.command()
+    @commands.is_owner()
+    async def dmchannel(self, ctx: commands.Context, channel: discord.TextChannel = None):
+        """Set the dm log channel.
+
+        This will log dms sent by users"""
+        if not channel:
+            await ctx.send("Okay. I have reset the dm log channel.")
+            await self.bot._config.dm_log_channel.clear()
+        else:
+            await ctx.send(f"The dm log channel is now set to `{channel.name}`")
+            await self.bot._config.dm_log_channel.set(channel.id)
 
     # -- Bot Metadata Commands -- ###
 
