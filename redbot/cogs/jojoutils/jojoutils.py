@@ -18,9 +18,10 @@ import logging
 log = logging.getLogger("red.JojoUtils")
 _config = {"denyed_bots": {}}
 
+
 async def check(ctx: commands.Context) -> bool:
     if not ctx.guild:
-        return True # Not in a guild. Don't check perms
+        return True  # Not in a guild. Don't check perms
     return ctx.channel.permissions_for(ctx.me).attach_files
 
 
@@ -168,7 +169,9 @@ class JojoUtils(commands.Cog):
             data = data.decode()
         async with ctx.typing():
             data = await self._actual_jsonify(data)
-        await ctx.send("Here is your jsonified string", file=text_to_file(data, "jsonifed_text.txt"))
+        await ctx.send(
+            "Here is your jsonified string", file=text_to_file(data, "jsonifed_text.txt")
+        )
 
     async def _actual_jsonify(self, data: str) -> str:
         ret = []
@@ -184,4 +187,4 @@ class JojoUtils(commands.Cog):
                 line = line.replace('"', r"\"")
             ret.append(f'"{line}",')
             last_line = line
-        return "\n".join(ret)[:-1] # Remove the last comma
+        return "\n".join(ret)[:-1]  # Remove the last comma

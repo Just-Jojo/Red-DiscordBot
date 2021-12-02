@@ -762,7 +762,9 @@ class Downloader(commands.Cog):
             )
 
     @cog.command(name="install", usage="<repo> <cogs...>", require_var_positional=True)
-    async def _cog_install(self, ctx: commands.Context, load_after: Optional[bool], repo: Repo, *cog_names: str) -> None:
+    async def _cog_install(
+        self, ctx: commands.Context, load_after: Optional[bool], repo: Repo, *cog_names: str
+    ) -> None:
         """Install a cog from the given repo.
 
         Examples:
