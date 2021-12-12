@@ -113,6 +113,7 @@ class Red(
             sudotime=15 * 60,  # 15 minutes default
             fuzzy=False,
             custom_info=None,
+            ping_info=False,
             help__page_char_limit=1000,
             help__max_pages_in_guild=2,
             help__delete_delay=0,

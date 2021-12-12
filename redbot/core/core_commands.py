@@ -2431,6 +2431,16 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
             await ctx.send(f"The dm log channel is now set to `{channel.name}`")
             await self.bot._config.dm_log_channel.set(channel.id)
 
+    @_set.command()
+    @commands.is_owner()
+    async def pinginfo(self, ctx: commands.Context):
+        """Turn off the information message when [botname] is pinged"""
+        coro = self.bot._config.ping_info
+        current = not await coro()
+        await coro.set(current)
+        disabled = "enabled" if current else "disabled"
+        await ctx.send(f"Ping information is now {disabled}.")
+
     # -- Bot Metadata Commands -- ###
 
     @_set.group(name="bot", aliases=["metadata"])
@@ -5443,7 +5453,7 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
         if msg.author.bot:
             return
         bot_id = re.compile(rf"^<@!?{self.bot.user.id}>$")
-        if re.match(bot_id, msg.content):
+        if await self.bot._config.ping_info() and re.match(bot_id, msg.content):
             prefixes = set(await self.bot.get_valid_prefixes(msg.guild))
             for maybe in (f"<@{self.bot.user.id}>", f"<@!{self.bot.user.id}>"):
                 if maybe in prefixes:
@@ -5457,9 +5467,13 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
             plural = "es" if len(prefixes) > 1 else ""
             is_are = "are" if len(prefixes) > 1 else "is"
             prefixes = humanize_list([f"`{prefix}`" for prefix in prefixes])
-            return await msg.reply(
-                f"Hallo there! I'm Jojobot!\nMy prefix{plural} {is_are} {prefixes}!"
-                f"\nWhy don't you use `{help_prefix}help` to see what I can do?"
+            reference = msg.to_reference(fail_if_not_exists=False)
+            return await msg.channel.send(
+                (
+                    f"Hallo there! I'm Jojobot!\nMy prefix{plural} {is_are} {prefixes}!"
+                    f"\nWhy don't you use `{help_prefix}help` to see what I can do?"
+                ),
+                reference=reference,
             )
         if not msg.guild:
             allowed = await self.bot.allowed_by_whitelist_blacklist(msg.author)
