@@ -252,7 +252,6 @@ class Red(
         # Turns out that draper was smart
         if cli_flags.enable_sudo:
             self._sudo_ctx_var = ContextVar("SudoOwners")
-            self._elevated_owner_ids = self._all_owner_ids
         # Do not manually use the help formatter attribute here, see `send_help_for`,
         # for a documented API. The internals of this object are still subject to change.
         self._help_formatter = commands.help.RedHelpFormatter()
@@ -1180,6 +1179,7 @@ class Red(
         elif last_system_info["system"] != system:
             await self._config.last_system_info.system.set(system)
             system_changed = True
+        self._elevated_owner_ids = self.all_owner_ids
 
         if system_changed and not python_version_changed:
             self.loop.create_task(
