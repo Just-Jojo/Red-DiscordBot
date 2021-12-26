@@ -375,19 +375,11 @@ class Dev(commands.Cog):
         Only reads the raw content of the message. Attachments, embeds etc. are
         ignored.
         """
-        old_author = ctx.author
-        old_content = ctx.message.content
-        ctx.message.author = user
-        ctx.message.content = content
+        message = copy(ctx.message)
+        message.content = content
+        message.author = user
 
-        ctx.bot.dispatch("message", ctx.message)
-
-        # If we change the author and content back too quickly,
-        # the bot won't process the mocked message in time.
-        await asyncio.sleep(2)
-        ctx.message.author = old_author
-        ctx.message.content = old_content
-        await ctx.tick()
+        ctx.bot.dispatch("message", message)
 
     @commands.command()
     @checks.is_owner()
