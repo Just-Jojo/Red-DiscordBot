@@ -170,7 +170,6 @@ class ModInfo(MixinMeta):
 
     @commands.command()
     @commands.guild_only()
-    @commands.bot_has_permissions(embed_links=True)
     async def userinfo(self, ctx, *, member: discord.Member = None):
         """Show information about a member.
 
@@ -180,128 +179,130 @@ class ModInfo(MixinMeta):
         If the member has no roles, previous names or previous nicknames,
         these fields will be omitted.
         """
-        author = ctx.author
-        guild = ctx.guild
+        # author = ctx.author
+        # guild = ctx.guild
 
-        if not member:
-            member = author
+        that = "That user" if member else "You"
+        plural = "s" if member else ""
 
-        #  A special case for a special someone :^)
-        special_date = datetime.datetime(2016, 1, 10, 6, 8, 4, 443000, datetime.timezone.utc)
-        is_special = member.id == 96130341705637888 and guild.id == 133049272517001216
+        await ctx.send(f"{that} probably exist{plural}")
 
-        roles = member.roles[-1:0:-1]
-        names, nicks = await self.get_names_and_nicks(member)
+        # #  A special case for a special someone :^)
+        # special_date = datetime.datetime(2016, 1, 10, 6, 8, 4, 443000, datetime.timezone.utc)
+        # is_special = member.id == 96130341705637888 and guild.id == 133049272517001216
 
-        if is_special:
-            joined_at = special_date
-        elif joined_at := member.joined_at:
-            joined_at = joined_at.replace(tzinfo=datetime.timezone.utc)
-        user_created = int(member.created_at.replace(tzinfo=datetime.timezone.utc).timestamp())
-        voice_state = member.voice
-        member_number = (
-            sorted(guild.members, key=lambda m: m.joined_at or ctx.message.created_at).index(
-                member
-            )
-            + 1
-        )
+        # roles = member.roles[-1:0:-1]
+        # names, nicks = await self.get_names_and_nicks(member)
 
-        created_on = "<t:{0}>\n(<t:{0}:R>)".format(user_created)
-        if joined_at is not None:
-            joined_on = "<t:{0}>\n(<t:{0}:R>)".format(int(joined_at.timestamp()))
-        else:
-            joined_on = _("Unknown")
+        # if is_special:
+        #     joined_at = special_date
+        # elif joined_at := member.joined_at:
+        #     joined_at = joined_at.replace(tzinfo=datetime.timezone.utc)
+        # user_created = int(member.created_at.replace(tzinfo=datetime.timezone.utc).timestamp())
+        # voice_state = member.voice
+        # member_number = (
+        #     sorted(guild.members, key=lambda m: m.joined_at or ctx.message.created_at).index(
+        #         member
+        #     )
+        #     + 1
+        # )
 
-        if any(a.type is discord.ActivityType.streaming for a in member.activities):
-            statusemoji = "\N{LARGE PURPLE CIRCLE}"
-        elif member.status.name == "online":
-            statusemoji = "\N{LARGE GREEN CIRCLE}"
-        elif member.status.name == "offline":
-            statusemoji = "\N{MEDIUM WHITE CIRCLE}\N{VARIATION SELECTOR-16}"
-        elif member.status.name == "dnd":
-            statusemoji = "\N{LARGE RED CIRCLE}"
-        elif member.status.name == "idle":
-            statusemoji = "\N{LARGE ORANGE CIRCLE}"
-        activity = _("Chilling in {} status").format(member.status)
-        status_string = self.get_status_string(member)
+        # created_on = "<t:{0}>\n(<t:{0}:R>)".format(user_created)
+        # if joined_at is not None:
+        #     joined_on = "<t:{0}>\n(<t:{0}:R>)".format(int(joined_at.timestamp()))
+        # else:
+        #     joined_on = _("Unknown")
 
-        if roles:
+        # if any(a.type is discord.ActivityType.streaming for a in member.activities):
+        #     statusemoji = "\N{LARGE PURPLE CIRCLE}"
+        # elif member.status.name == "online":
+        #     statusemoji = "\N{LARGE GREEN CIRCLE}"
+        # elif member.status.name == "offline":
+        #     statusemoji = "\N{MEDIUM WHITE CIRCLE}\N{VARIATION SELECTOR-16}"
+        # elif member.status.name == "dnd":
+        #     statusemoji = "\N{LARGE RED CIRCLE}"
+        # elif member.status.name == "idle":
+        #     statusemoji = "\N{LARGE ORANGE CIRCLE}"
+        # activity = _("Chilling in {} status").format(member.status)
+        # status_string = self.get_status_string(member)
 
-            role_str = ", ".join([x.mention for x in roles])
-            # 400 BAD REQUEST (error code: 50035): Invalid Form Body
-            # In embed.fields.2.value: Must be 1024 or fewer in length.
-            if len(role_str) > 1024:
-                # Alternative string building time.
-                # This is not the most optimal, but if you're hitting this, you are losing more time
-                # to every single check running on users than the occasional user info invoke
-                # We don't start by building this way, since the number of times we hit this should be
-                # infinitesimally small compared to when we don't across all uses of Red.
-                continuation_string = _(
-                    "and {numeric_number} more roles not displayed due to embed limits."
-                )
-                available_length = 1024 - len(continuation_string)  # do not attempt to tweak, i18n
+        # if roles:
 
-                role_chunks = []
-                remaining_roles = 0
+        #     role_str = ", ".join([x.mention for x in roles])
+        #     # 400 BAD REQUEST (error code: 50035): Invalid Form Body
+        #     # In embed.fields.2.value: Must be 1024 or fewer in length.
+        #     if len(role_str) > 1024:
+        #         # Alternative string building time.
+        #         # This is not the most optimal, but if you're hitting this, you are losing more time
+        #         # to every single check running on users than the occasional user info invoke
+        #         # We don't start by building this way, since the number of times we hit this should be
+        #         # infinitesimally small compared to when we don't across all uses of Red.
+        #         continuation_string = _(
+        #             "and {numeric_number} more roles not displayed due to embed limits."
+        #         )
+        #         available_length = 1024 - len(continuation_string)  # do not attempt to tweak, i18n
 
-                for r in roles:
-                    chunk = f"{r.mention}, "
-                    chunk_size = len(chunk)
+        #         role_chunks = []
+        #         remaining_roles = 0
 
-                    if chunk_size < available_length:
-                        available_length -= chunk_size
-                        role_chunks.append(chunk)
-                    else:
-                        remaining_roles += 1
+        #         for r in roles:
+        #             chunk = f"{r.mention}, "
+        #             chunk_size = len(chunk)
 
-                role_chunks.append(continuation_string.format(numeric_number=remaining_roles))
+        #             if chunk_size < available_length:
+        #                 available_length -= chunk_size
+        #                 role_chunks.append(chunk)
+        #             else:
+        #                 remaining_roles += 1
 
-                role_str = "".join(role_chunks)
+        #         role_chunks.append(continuation_string.format(numeric_number=remaining_roles))
 
-        else:
-            role_str = None
+        #         role_str = "".join(role_chunks)
 
-        data = discord.Embed(description=status_string or activity, colour=member.colour)
+        # else:
+        #     role_str = None
 
-        data.add_field(name=_("Joined Discord on"), value=created_on)
-        data.add_field(name=_("Joined this server on"), value=joined_on)
-        if role_str is not None:
-            data.add_field(
-                name=_("Roles") if len(roles) > 1 else _("Role"), value=role_str, inline=False
-            )
-        if names:
-            # May need sanitizing later, but mentions do not ping in embeds currently
-            val = filter_invites(", ".join(names))
-            data.add_field(
-                name=_("Previous Names") if len(names) > 1 else _("Previous Name"),
-                value=val,
-                inline=False,
-            )
-        if nicks:
-            # May need sanitizing later, but mentions do not ping in embeds currently
-            val = filter_invites(", ".join(nicks))
-            data.add_field(
-                name=_("Previous Nicknames") if len(nicks) > 1 else _("Previous Nickname"),
-                value=val,
-                inline=False,
-            )
-        if voice_state and voice_state.channel:
-            data.add_field(
-                name=_("Current voice channel"),
-                value="{0.mention} ID: {0.id}".format(voice_state.channel),
-                inline=False,
-            )
-        data.set_footer(text=_("Member #{} | User ID: {}").format(member_number, member.id))
+        # data = discord.Embed(description=status_string or activity, colour=member.colour)
 
-        name = str(member)
-        name = " ~ ".join((name, member.nick)) if member.nick else name
-        name = filter_invites(name)
+        # data.add_field(name=_("Joined Discord on"), value=created_on)
+        # data.add_field(name=_("Joined this server on"), value=joined_on)
+        # if role_str is not None:
+        #     data.add_field(
+        #         name=_("Roles") if len(roles) > 1 else _("Role"), value=role_str, inline=False
+        #     )
+        # if names:
+        #     # May need sanitizing later, but mentions do not ping in embeds currently
+        #     val = filter_invites(", ".join(names))
+        #     data.add_field(
+        #         name=_("Previous Names") if len(names) > 1 else _("Previous Name"),
+        #         value=val,
+        #         inline=False,
+        #     )
+        # if nicks:
+        #     # May need sanitizing later, but mentions do not ping in embeds currently
+        #     val = filter_invites(", ".join(nicks))
+        #     data.add_field(
+        #         name=_("Previous Nicknames") if len(nicks) > 1 else _("Previous Nickname"),
+        #         value=val,
+        #         inline=False,
+        #     )
+        # if voice_state and voice_state.channel:
+        #     data.add_field(
+        #         name=_("Current voice channel"),
+        #         value="{0.mention} ID: {0.id}".format(voice_state.channel),
+        #         inline=False,
+        #     )
+        # data.set_footer(text=_("Member #{} | User ID: {}").format(member_number, member.id))
 
-        avatar = member.avatar_url_as(static_format="png")
-        data.set_author(name=f"{statusemoji} {name}", url=avatar)
-        data.set_thumbnail(url=avatar)
+        # name = str(member)
+        # name = " ~ ".join((name, member.nick)) if member.nick else name
+        # name = filter_invites(name)
 
-        await ctx.send(embed=data)
+        # avatar = member.avatar_url_as(static_format="png")
+        # data.set_author(name=f"{statusemoji} {name}", url=avatar)
+        # data.set_thumbnail(url=avatar)
+
+        # await ctx.send(embed=data)
 
     @commands.command()
     async def names(self, ctx: commands.Context, *, member: discord.Member):
