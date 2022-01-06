@@ -104,7 +104,7 @@ _ = i18n.Translator("Core", __file__)
 
 TokenConverter = commands.get_dict_converter(delims=[" ", ",", ";"])
 
-MAX_PREFIX_LENGTH = 20
+MAX_PREFIX_LENGTH = 25
 
 
 class CoreLogic:
@@ -118,11 +118,7 @@ class CoreLogic:
         self.bot.register_rpc_handler(self._version_info)
         self.bot.register_rpc_handler(self._invite_url)
 
-    async def _load(
-        self, pkg_names: Iterable[str]
-    ) -> Tuple[
-        List[str], List[str], List[str], List[str], List[str], List[Tuple[str, str]], Set[str]
-    ]:
+    async def _load(self, pkg_names: Iterable[str]) -> Dict[str, Union[List[str], Dict[str, str]]]:
         """
         Loads packages by name.
 
@@ -133,23 +129,23 @@ class CoreLogic:
 
         Returns
         -------
-        tuple
-            7-tuple of:
-              1. List of names of packages that loaded successfully
-              2. List of names of packages that failed to load without specified reason
-              3. List of names of packages that don't have a valid package name
-              4. List of names of packages that weren't found in any cog path
-              5. List of names of packages that are already loaded
-              6. List of 2-tuples (pkg_name, reason) for packages
-              that failed to load with a specified reason
-              7. Set of repo names that use deprecated shared libraries
+        dict
+            Dictionary with keys:
+              ``loaded_packages``: List of names of packages that loaded successfully
+              ``failed_packages``: List of names of packages that failed to load without specified reason
+              ``invalid_pkg_names``: List of names of packages that don't have a valid package name
+              ``notfound_packages``: List of names of packages that weren't found in any cog path
+              ``alreadyloaded_packages``: List of names of packages that are already loaded
+              ``failed_with_reason_packages``: Dictionary of packages that failed to load with
+              a specified reason with mapping of package names -> failure reason
+              ``repos_with_shared_libs``: List of repo names that use deprecated shared libraries
         """
         failed_packages = []
         loaded_packages = []
         invalid_pkg_names = []
         notfound_packages = []
         alreadyloaded_packages = []
-        failed_with_reason_packages = []
+        failed_with_reason_packages = {}
         repos_with_shared_libs = set()
 
         bot = self.bot
@@ -181,7 +177,7 @@ class CoreLogic:
             except errors.PackageAlreadyLoaded:
                 alreadyloaded_packages.append(name)
             except errors.CogLoadError as e:
-                failed_with_reason_packages.append((name, str(e)))
+                failed_with_reason_packages[name] = str(e)
             except Exception as e:
                 if isinstance(e, commands.CommandRegistrationError):
                     if e.alias_conflict:
@@ -194,7 +190,7 @@ class CoreLogic:
                             "Command {command_name} is already an existing command"
                             " or alias in one of the loaded cogs."
                         ).format(command_name=inline(e.name))
-                    failed_with_reason_packages.append((name, error_message))
+                    failed_with_reason_packages[name] = error_message
                     continue
 
                 log.exception("Package loading failed", exc_info=e)
@@ -221,15 +217,15 @@ class CoreLogic:
                 if maybe_repo is not None:
                     repos_with_shared_libs.add(maybe_repo.name)
 
-        return (
-            loaded_packages,
-            failed_packages,
-            invalid_pkg_names,
-            notfound_packages,
-            alreadyloaded_packages,
-            failed_with_reason_packages,
-            repos_with_shared_libs,
-        )
+        return {
+            "loaded_packages": loaded_packages,
+            "failed_packages": failed_packages,
+            "invalid_pkg_names": invalid_pkg_names,
+            "notfound_packages": notfound_packages,
+            "alreadyloaded_packages": alreadyloaded_packages,
+            "failed_with_reason_packages": failed_with_reason_packages,
+            "repos_with_shared_libs": list(repos_with_shared_libs),
+        }
 
     @staticmethod
     def _cleanup_and_refresh_modules(module_name: str) -> None:
@@ -257,7 +253,7 @@ class CoreLogic:
         for child_name, lib in children.items():
             importlib._bootstrap._exec(lib.__spec__, lib)
 
-    async def _unload(self, pkg_names: Iterable[str]) -> Tuple[List[str], List[str]]:
+    async def _unload(self, pkg_names: Iterable[str]) -> Dict[str, List[str]]:
         """
         Unloads packages with the given names.
 
@@ -268,10 +264,13 @@ class CoreLogic:
 
         Returns
         -------
-        tuple
-            2 element tuple of successful unloads and failed unloads.
+        dict
+            Dictionary with keys:
+              ``unloaded_packages``: List of names of packages that unloaded successfully.
+              ``notloaded_packages``: List of names of packages that weren't unloaded
+              because they weren't loaded.
         """
-        failed_packages = []
+        notloaded_packages = []
         unloaded_packages = []
 
         bot = self.bot
@@ -282,15 +281,13 @@ class CoreLogic:
                 await bot.remove_loaded_package(name)
                 unloaded_packages.append(name)
             else:
-                failed_packages.append(name)
+                notloaded_packages.append(name)
 
-        return unloaded_packages, failed_packages
+        return {"unloaded_packages": unloaded_packages, "notloaded_packages": notloaded_packages}
 
     async def _reload(
         self, pkg_names: Sequence[str]
-    ) -> Tuple[
-        List[str], List[str], List[str], List[str], List[str], List[Tuple[str, str]], Set[str]
-    ]:
+    ) -> Dict[str, Union[List[str], Dict[str, str]]]:
         """
         Reloads packages with the given names.
 
@@ -301,30 +298,12 @@ class CoreLogic:
 
         Returns
         -------
-        tuple
-            Tuple as returned by `CoreLogic._load()`
+        dict
+            Dictionary with keys as returned by `CoreLogic._load()`
         """
         await self._unload(pkg_names)
 
-        (
-            loaded,
-            load_failed,
-            invalid_pkg_names,
-            not_found,
-            already_loaded,
-            load_failed_with_reason,
-            repos_with_shared_libs,
-        ) = await self._load(pkg_names)
-
-        return (
-            loaded,
-            load_failed,
-            invalid_pkg_names,
-            not_found,
-            already_loaded,
-            load_failed_with_reason,
-            repos_with_shared_libs,
-        )
+        return await self._load(pkg_names)
 
     async def _name(self, name: Optional[str] = None) -> str:
         """
@@ -385,13 +364,7 @@ class CoreLogic:
         str
             Invite URL.
         """
-        app_info = await self.bot.application_info()
-        data = await self.bot._config.all()
-        commands_scope = data["invite_commands_scope"]
-        scopes = ("bot", "applications.commands") if commands_scope else None
-        perms_int = data["invite_perm"]
-        permissions = discord.Permissions(perms_int)
-        return discord.utils.oauth_url(app_info.id, permissions, scopes=scopes)
+        return await self.bot.get_invite_url()
 
     @staticmethod
     async def _can_get_invite_url(ctx):
@@ -409,7 +382,7 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
     """
 
     async def red_delete_data_for_user(self, **kwargs):
-        """ Nothing to delete (Core Config is handled in a bot method ) """
+        """Nothing to delete (Core Config is handled in a bot method)"""
         return
 
     @commands.command(hidden=True, aliases=("ding",))
@@ -1539,18 +1512,13 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
         **Example:**
             - `[p]invite`
         """
-        public = await self.bot._config.invite_public()
-        channel = ctx.author
-        if public:
-            channel = ctx.channel
-        invite = await self._invite_url()
-        kwargs = {"content": f"Here is Jojobot's invite: {invite}"}
-        if await ctx.embed_requested():
-            embed = discord.Embed(
-                title="Jojobot invte",
-                description=f"Here is [Jojobot's invite]({invite}) url",
-                colour=await ctx.embed_colour(),
-                timestamp=datetime.datetime.utcnow(),
+        try:
+            await ctx.author.send(await self.bot.get_invite_url())
+            await ctx.tick()
+        except discord.errors.Forbidden:
+            await ctx.send(
+                "I couldn't send the invite message to you in DM. "
+                "Either you blocked me or you disabled DMs in this server."
             )
             embed.set_thumbnail(url=ctx.me.avatar_url)
             embed.add_field(name="Here is a link if you're on mobile", value=invite)
@@ -1667,6 +1635,7 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
             return await ctx.send(_("You need to specify at least one server ID."))
 
         leaving_local_guild = not guilds
+        number = len(guilds)
 
         if leaving_local_guild:
             guilds = (ctx.guild,)
@@ -1675,11 +1644,18 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
                 + " (yes/no)"
             )
         else:
-            msg = (
-                _("Are you sure you want me to leave these servers?")
-                + " (yes/no):\n"
-                + "\n".join(f"- {guild.name} (`{guild.id}`)" for guild in guilds)
-            )
+            if number > 1:
+                msg = (
+                    _("Are you sure you want me to leave these servers?")
+                    + " (yes/no):\n"
+                    + "\n".join(f"- {guild.name} (`{guild.id}`)" for guild in guilds)
+                )
+            else:
+                msg = (
+                    _("Are you sure you want me to leave this server?")
+                    + " (yes/no):\n"
+                    + f"- {guilds[0].name} (`{guilds[0].id}`)"
+                )
 
         for guild in guilds:
             if guild.owner.id == ctx.me.id:
@@ -1702,9 +1678,12 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
                 if leaving_local_guild is True:
                     await ctx.send(_("Alright. Bye :wave:"))
                 else:
-                    await ctx.send(
-                        _("Alright. Leaving {number} servers...").format(number=len(guilds))
-                    )
+                    if number > 1:
+                        await ctx.send(
+                            _("Alright. Leaving {number} servers...").format(number=number)
+                        )
+                    else:
+                        await ctx.send(_("Alright. Leaving one server..."))
                 for guild in guilds:
                     log.debug("Leaving guild '%s' (%s)", guild.name, guild.id)
                     await guild.leave()
@@ -1712,7 +1691,10 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
                 if leaving_local_guild is True:
                     await ctx.send(_("Alright, I'll stay then. :)"))
                 else:
-                    await ctx.send(_("Alright, I'm not leaving those servers."))
+                    if number > 1:
+                        await ctx.send(_("Alright, I'm not leaving those servers."))
+                    else:
+                        await ctx.send(_("Alright, I'm not leaving that server."))
 
     @commands.command()
     @checks.is_owner()
@@ -1750,24 +1732,16 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
         """
         cogs = tuple(map(lambda cog: cog.rstrip(","), cogs))
         async with ctx.typing():
-            (
-                loaded,
-                failed,
-                invalid_pkg_names,
-                not_found,
-                already_loaded,
-                failed_with_reason,
-                repos_with_shared_libs,
-            ) = await self._load(cogs)
+            outcomes = await self._load(cogs)
 
         output = []
 
-        if loaded:
+        if loaded := outcomes["loaded_packages"]:
             loaded_packages = humanize_list([inline(package) for package in loaded])
             formed = _("Loaded {packs}.").format(packs=loaded_packages)
             output.append(formed)
 
-        if already_loaded:
+        if already_loaded := outcomes["alreadyloaded_packages"]:
             if len(already_loaded) == 1:
                 formed = _("The following package is already loaded: {pack}").format(
                     pack=inline(already_loaded[0])
@@ -1778,7 +1752,7 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
                 )
             output.append(formed)
 
-        if failed:
+        if failed := outcomes["failed_packages"]:
             if len(failed) == 1:
                 formed = _(
                     "Failed to load the following package: {pack}."
@@ -1791,7 +1765,7 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
                 ).format(packs=humanize_list([inline(package) for package in failed]))
             output.append(formed)
 
-        if invalid_pkg_names:
+        if invalid_pkg_names := outcomes["invalid_pkg_names"]:
             if len(invalid_pkg_names) == 1:
                 formed = _(
                     "The following name is not a valid package name: {pack}\n"
@@ -1806,7 +1780,7 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
                 ).format(packs=humanize_list([inline(package) for package in invalid_pkg_names]))
             output.append(formed)
 
-        if not_found:
+        if not_found := outcomes["notfound_packages"]:
             if len(not_found) == 1:
                 formed = _("The following package was not found in any cog path: {pack}.").format(
                     pack=inline(not_found[0])
@@ -1817,8 +1791,8 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
                 ).format(packs=humanize_list([inline(package) for package in not_found]))
             output.append(formed)
 
-        if failed_with_reason:
-            reasons = "\n".join([f"`{x}`: {y}" for x, y in failed_with_reason])
+        if failed_with_reason := outcomes["failed_with_reason_packages"]:
+            reasons = "\n".join([f"`{x}`: {y}" for x, y in failed_with_reason.items()])
             if len(failed_with_reason) == 1:
                 formed = _(
                     "This package could not be loaded for the following reason:\n\n{reason}"
@@ -1829,7 +1803,7 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
                 ).format(reasons=reasons)
             output.append(formed)
 
-        if repos_with_shared_libs:
+        if repos_with_shared_libs := outcomes["repos_with_shared_libs"]:
             if len(repos_with_shared_libs) == 1:
                 formed = _(
                     "**WARNING**: The following repo is using shared libs"
@@ -1868,11 +1842,11 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
             - `<cogs...>` - The cog packages to unload.
         """
         cogs = tuple(map(lambda cog: cog.rstrip(","), cogs))
-        unloaded, failed = await self._unload(cogs)
+        outcomes = await self._unload(cogs)
 
         output = []
 
-        if unloaded:
+        if unloaded := outcomes["unloaded_packages"]:
             if len(unloaded) == 1:
                 formed = _("The following package was unloaded: {pack}.").format(
                     pack=inline(unloaded[0])
@@ -1883,7 +1857,7 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
                 )
             output.append(formed)
 
-        if failed:
+        if failed := outcomes["notloaded_packages"]:
             if len(failed) == 1:
                 formed = _("The following package was not loaded: {pack}.").format(
                     pack=inline(failed[0])
@@ -1917,24 +1891,16 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
         """
         cogs = tuple(map(lambda cog: cog.rstrip(","), cogs))
         async with ctx.typing():
-            (
-                loaded,
-                failed,
-                invalid_pkg_names,
-                not_found,
-                already_loaded,
-                failed_with_reason,
-                repos_with_shared_libs,
-            ) = await self._reload(cogs)
+            outcomes = await self._reload(cogs)
 
         output = []
 
-        if loaded:
+        if loaded := outcomes["loaded_packages"]:
             loaded_packages = humanize_list([inline(package) for package in loaded])
             formed = _("Reloaded {packs}.").format(packs=loaded_packages)
             output.append(formed)
 
-        if failed:
+        if failed := outcomes["failed_packages"]:
             if len(failed) == 1:
                 formed = _(
                     "Failed to reload the following package: {pack}."
@@ -1947,7 +1913,7 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
                 ).format(packs=humanize_list([inline(package) for package in failed]))
             output.append(formed)
 
-        if invalid_pkg_names:
+        if invalid_pkg_names := outcomes["invalid_pkg_names"]:
             if len(invalid_pkg_names) == 1:
                 formed = _(
                     "The following name is not a valid package name: {pack}\n"
@@ -1962,7 +1928,7 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
                 ).format(packs=humanize_list([inline(package) for package in invalid_pkg_names]))
             output.append(formed)
 
-        if not_found:
+        if not_found := outcomes["notfound_packages"]:
             if len(not_found) == 1:
                 formed = _("The following package was not found in any cog path: {pack}.").format(
                     pack=inline(not_found[0])
@@ -1973,8 +1939,8 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
                 ).format(packs=humanize_list([inline(package) for package in not_found]))
             output.append(formed)
 
-        if failed_with_reason:
-            reasons = "\n".join([f"`{x}`: {y}" for x, y in failed_with_reason])
+        if failed_with_reason := outcomes["failed_with_reason_packages"]:
+            reasons = "\n".join([f"`{x}`: {y}" for x, y in failed_with_reason.items()])
             if len(failed_with_reason) == 1:
                 formed = _(
                     "This package could not be reloaded for the following reason:\n\n{reason}"
@@ -1985,7 +1951,7 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
                 ).format(reasons=reasons)
             output.append(formed)
 
-        if repos_with_shared_libs:
+        if repos_with_shared_libs := outcomes["repos_with_shared_libs"]:
             if len(repos_with_shared_libs) == 1:
                 formed = _(
                     "**WARNING**: The following repo is using shared libs"
@@ -3219,7 +3185,7 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
         Note: API tokens are sensitive, so this command should only be used in a private channel or in DM with the bot.
 
         **Examples:**
-            - `[p]set api Spotify redirect_uri localhost`
+            - `[p]set api spotify redirect_uri localhost`
             - `[p]set api github client_id,whoops client_secret,whoops`
 
         **Arguments:**
@@ -3263,8 +3229,8 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
         Remove the given services with all their keys and tokens.
 
         **Examples:**
-            - `[p]set api remove Spotify`
-            - `[p]set api remove github audiodb`
+            - `[p]set api remove spotify`
+            - `[p]set api remove github youtube`
 
         **Arguments:**
             - `<services...>` - The services to remove."""
@@ -3640,7 +3606,7 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
         if any(len(x) > MAX_PREFIX_LENGTH for x in prefixes):
             await ctx.send(
                 _(
-                    "Warning: A prefix is above the recommended length (20 characters).\n"
+                    "Warning: A prefix is above the recommended length (25 characters).\n"
                     "Do you want to continue?"
                 )
                 + " (yes/no)"
@@ -3670,7 +3636,7 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
 
         Warning: This will override global prefixes, the bot will not respond to any global prefixes in this server.
             This is not additive. It will replace all current server prefixes.
-            A prefix cannot have more than 20 characters.
+            A prefix cannot have more than 25 characters.
 
         **Examples:**
             - `[p]set serverprefix !`
@@ -3686,7 +3652,7 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
             await ctx.send(_("Server prefixes have been reset."))
             return
         if any(len(x) > MAX_PREFIX_LENGTH for x in prefixes):
-            await ctx.send(_("You cannot have a prefix longer than 20 characters."))
+            await ctx.send(_("You cannot have a prefix longer than 25 characters."))
             return
         prefixes = sorted(prefixes, reverse=True)
         await ctx.bot.set_prefixes(guild=ctx.guild, prefixes=prefixes)
@@ -4989,9 +4955,10 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
             )
             return
 
-        if command.requires.privilege_level > await PrivilegeLevel.from_ctx(ctx):
-            await ctx.send(_("You are not allowed to disable that command."))
-            return
+        if command.requires.privilege_level is not None:
+            if command.requires.privilege_level > await PrivilegeLevel.from_ctx(ctx):
+                await ctx.send(_("You are not allowed to disable that command."))
+                return
 
         async with ctx.bot._config.guild(ctx.guild).disabled_commands() as disabled_commands:
             if command.qualified_name not in disabled_commands:
@@ -5060,9 +5027,10 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
         **Arguments:**
             - `<command>` - The command to enable for the current server.
         """
-        if command.requires.privilege_level > await PrivilegeLevel.from_ctx(ctx):
-            await ctx.send(_("You are not allowed to enable that command."))
-            return
+        if command.requires.privilege_level is not None:
+            if command.requires.privilege_level > await PrivilegeLevel.from_ctx(ctx):
+                await ctx.send(_("You are not allowed to enable that command."))
+                return
 
         async with ctx.bot._config.guild(ctx.guild).disabled_commands() as disabled_commands:
             with contextlib.suppress(ValueError):
