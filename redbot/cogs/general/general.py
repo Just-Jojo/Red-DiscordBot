@@ -2,7 +2,7 @@ import datetime
 import time
 from enum import Enum
 from random import randint, choice
-from typing import Final
+from typing import Final, Optional
 import urllib.parse
 import aiohttp
 import discord
@@ -18,6 +18,14 @@ from redbot.core.utils.chat_formatting import (
 )
 
 _ = T_ = Translator("General", __file__)
+
+
+class OddInt(commands.Converter):
+    async def convert(self, ctx: commands.Context, arg: str) -> int:
+        ret = int(arg) # Don't have to catch here since I don't need logic for it
+        if not ret % 2:
+            raise commands.BadArgument("You must input an odd number")
+        return ret
 
 
 class RPS(Enum):
@@ -81,7 +89,7 @@ class General(commands.Cog):
         return
 
     @commands.command(usage="<first> <second> [others...]")
-    async def choose(self, ctx, *choices):
+    async def choose(self, ctx, amount: Optional[OddInt], *choices):
         """Choose between multiple options.
 
         There must be at least 2 options to pick from.
@@ -89,11 +97,19 @@ class General(commands.Cog):
 
         To denote options which include whitespace, you should enclose the options in double quotes.
         """
+        amount = amount or 1
+        if amount > 11:
+            amount = 11
         choices = [escape(c, mass_mentions=True) for c in choices if c]
         if len(choices) < 2:
-            await ctx.send(_("Not enough options to pick from."))
-        else:
-            await ctx.send(choice(choices))
+            return await ctx.send(_("Not enough options to pick from."))
+        if len(choices) != 2 or amount != 1: # Small if statement blocks are good
+            return await ctx.send(choice(choices))
+        picks = {k: 0 for k in choices}
+        for i in range(amount):
+            picks[choice(choices)] += 1
+        pick = sorted(picks.items(), key=lambda x: x[1])[1]
+        await ctx.send(f"Best of all choices: {pick[0]} (chosen {pick[1]} times)")
 
     @commands.command()
     async def roll(self, ctx, number: int = 100):
