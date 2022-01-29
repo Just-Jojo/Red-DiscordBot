@@ -103,7 +103,7 @@ class General(commands.Cog):
         choices = [escape(c, mass_mentions=True) for c in choices if c]
         if len(choices) < 2:
             return await ctx.send(_("Not enough options to pick from."))
-        if len(choices) != 2 or amount != 1: # Small if statement blocks are good
+        if len(choices) != 2 or amount == 1: # Small if statement blocks are good
             return await ctx.send(choice(choices))
         picks = {k: 0 for k in choices}
         for i in range(amount):
