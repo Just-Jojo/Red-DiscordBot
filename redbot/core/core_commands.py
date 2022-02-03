@@ -5444,7 +5444,7 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
                 reference=reference,
             )
         if not msg.guild:
-            allowed = await self.bot.allowed_by_whitelist_blacklist(msg.author)
+            allowed = msg.author in await self.bot.get_blacklist()
             if not allowed:
                 await msg.reply(
                     "You are blacklisted from Jojobot. "
@@ -5458,14 +5458,23 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
             if not maybe_channel or not (channel := self.bot.get_channel(maybe_channel)):
                 return
             title = f"Dm from {msg.author} ({msg.author.id})"
-            kwargs = {"content": f"**{title}**\n{msg.content}"}
-            if await self.bot.embed_requested(channel, msg.author):
-                embed = discord.Embed(
-                    title=title,
-                    description=msg.content,
-                    colour=await self.bot.get_embed_colour(channel),
-                )
-                embed.set_author(name=msg.author.name, icon_url=msg.author.avatar_url)
-                embed.timestamp = datetime.datetime.utcnow()
-                kwargs = {"embed": embed}
-            await channel.send(**kwargs)
+            attachments = []
+            if msg.attachments:
+                attachments = [y for x in msg.attachments if (y := getattr(x, "url", None))]
+
+            if not await self.bot.embed_requested(channel, msg.author):
+                data = f"**{title}**\n{msg.content}"
+                if attachments:
+                    data += ", ".join(attachments)
+                return await channel.send(data)
+            embed = discord.Embed(
+                title=title,
+                description=msg.content,
+                colour=await self.bot.get_embed_colour(channel),
+            )
+            embed.set_author(name=msg.author.name, icon_url=msg.author.avatar_url)
+            embed.timestamp = datetime.datetime.utcnow()
+            embeds = []
+            if attachments:
+                if len(attachments) == 1:
+                    ...
