@@ -42,7 +42,7 @@ from . import (
 )
 from ._diagnoser import IssueDiagnoser
 from .utils import AsyncIter
-from .utils._internal_utils import fetch_latest_red_version_info, is_sudo_enabled, timed_unsu
+from .utils._internal_utils import fetch_latest_red_version_info, is_sudo_enabled
 from .utils.predicates import MessagePredicate
 from .utils.chat_formatting import (
     box,
@@ -5341,9 +5341,6 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
             return
         self.bot._elevated_owner_ids |= {ctx.author.id}
         await ctx.send(_("Your bot owner privileges have been enabled."))
-        if ctx.author.id in self.bot._owner_sudo_tasks:
-            self.bot._owner_sudo_tasks[ctx.author.id].cancel()
-            del self.bot._owner_sudo_tasks[ctx.author.id]
 
     @commands.command(
         cls=commands.commands._IsTrueBotOwner,
@@ -5371,27 +5368,6 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
         msg = copy(ctx.message)
         msg.content = ctx.prefix + command
         ctx.bot.dispatch("message", msg)
-
-    @_set.command()
-    @is_sudo_enabled()
-    @checks.is_owner()
-    async def sutimeout(
-        self,
-        ctx: commands.Context,
-        *,
-        interval: commands.TimedeltaConverter(
-            minimum=datetime.timedelta(minutes=1),
-            maximum=datetime.timedelta(days=1),
-            default_unit="minutes",
-        ) = datetime.timedelta(minutes=15),
-    ):
-        """
-        Set the interval for SU permissions to auto expire.
-        """
-        await self.bot._config.sudotime.set(interval.total_seconds())
-        await ctx.send(
-            _("SU timer will expire after: {}.").format(humanize_timedelta(timedelta=interval))
-        )
 
     # Removing this command from forks is a violation of the GPLv3 under which it is licensed.
     # Otherwise interfering with the ability for this command to be accessible is also a violation.
