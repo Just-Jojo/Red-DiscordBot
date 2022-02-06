@@ -1,4 +1,5 @@
 import asyncio
+import aiohttp
 import inspect
 import logging
 import os
@@ -98,6 +99,7 @@ class Red(
         self.rpc_enabled = cli_flags.rpc
         self.rpc_port = cli_flags.rpc_port
         self._last_exception = None
+        self._session = aiohttp.ClientSession()
         self._config.register_global(
             token=None,
             prefix=[],
@@ -1973,6 +1975,7 @@ class Red(
             launcher sees this, it will attempt to restart the bot.
 
         """
+        await self._session.close()
         if not restart:
             self._shutdown_mode = ExitCodes.SHUTDOWN
         else:
