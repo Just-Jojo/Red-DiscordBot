@@ -72,21 +72,6 @@ class JojoUtils(commands.Cog):
 
         await ctx.send(discord.utils.escape_markdown(message.content))
 
-    @commands.Cog.listener()
-    async def on_message_delete(self, message: discord.Message):
-        if any([message.author.bot, not message.guild, message.guild.id != 696461072101539961]):
-            return
-        log_channel = message.guild.get_channel(827255649171013632)
-        embed = discord.Embed(
-            title=f"Deleted message by {message.author.name} ({message.author.id})",
-            description=message.content,
-            colour=0x00FFFF,
-            timestamp=datetime.utcnow(),
-        )
-        embed.set_author(name=message.author.name, icon_url=message.author.avatar_url)
-        embed.set_thumbnail(url=message.author.avatar_url)
-        await log_channel.send(embed=embed)
-
     @commands.command()
     @commands.guild_only()
     @commands.check(lambda c: c.guild.id == 744572173137477692)
