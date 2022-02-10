@@ -5420,8 +5420,8 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
                 reference=reference,
             )
         if not msg.guild:
-            allowed = msg.author in await self.bot.get_blacklist()
-            if not allowed:
+            disallowed = msg.author in await self.bot.get_blacklist()
+            if disallowed:
                 await msg.reply(
                     "You are blacklisted from Jojobot. "
                     "You may appeal here but Jojo (the owner) can ignore you if he so wishes."
