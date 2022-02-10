@@ -5427,7 +5427,7 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
                     "You may appeal here but Jojo (the owner) can ignore you if he so wishes."
                 )
             fake_context = await self.bot.get_context(msg)
-            if fake_context.command and allowed:
+            if fake_context.command and not disallowed:
                 return
             del fake_context
             maybe_channel = await self.bot._config.dm_log_channel()
