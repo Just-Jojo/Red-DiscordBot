@@ -437,26 +437,6 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
             kwargs = {"embed": embed}
         await ctx.send(**kwargs)
 
-    @commands.command(hidden=True)
-    @commands.is_owner()
-    @commands.check(lambda c: c.bot.get_cog("Downloader") is not None)
-    async def unusedrepos(self, ctx):
-        repo_cog = self.bot.get_cog("Downloader")
-        repos = [r.name for r in repo_cog._repo_manager.repos]
-        active_repos = {c.repo_name for c in await repo_cog.installed_cogs()}
-        fails = []
-        for r in active_repos:
-            try:
-                repos.remove(r)
-            except ValueError:
-                fails.append(r)
-        if "MISSING_REPO" in fails:
-            fails.remove("MISSING_REPO")
-        msg = "**Unused repos:\n**" + ", ".join(repos)
-        if fails:
-            msg += "\n**Failed repos:**\n" + ", ".join(fails)
-        await ctx.maybe_send_embed(msg)
-
     @commands.command()
     async def info(self, ctx: commands.Context):
         """Shows info about [botname]."""

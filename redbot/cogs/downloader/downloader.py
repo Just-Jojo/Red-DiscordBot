@@ -1821,3 +1821,21 @@ class Downloader(commands.Cog):
             " See logs for more information."
         )
         return message
+
+    @commands.command(hidden=True)
+    @commands.is_owner()
+    async def unusedrepos(self, ctx):
+        repos = [r.name for r in self._repo_manager.repos]
+        active_repos = {c.repo_name for c in await self.installed_cogs()}
+        fails = []
+        for r in active_repos:
+            try:
+                repos.remove(r)
+            except ValueError:
+                fails.append(r)
+        if "MISSING_REPO" in fails:
+            fails.remove("MISSING_REPO")
+        msg = "**Unused repos:\n**" + ", ".join(repos)
+        if fails:
+            msg += "\n**Failed repos:**\n" + ", ".join(fails)
+        await ctx.maybe_send_embed(msg)
