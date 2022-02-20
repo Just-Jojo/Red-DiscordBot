@@ -99,7 +99,7 @@ class Red(
         self.rpc_enabled = cli_flags.rpc
         self.rpc_port = cli_flags.rpc_port
         self._last_exception = None
-        self.session: aiohttp.ClientSession
+        self.session: aiohttp.ClientSession = None
         self._config.register_global(
             token=None,
             prefix=[],
