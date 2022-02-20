@@ -1976,7 +1976,7 @@ class Red(
             launcher sees this, it will attempt to restart the bot.
 
         """
-        await self._session.close()
+        await self.session.close()
         if not restart:
             self._shutdown_mode = ExitCodes.SHUTDOWN
         else:
