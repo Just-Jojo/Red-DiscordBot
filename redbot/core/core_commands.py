@@ -5431,6 +5431,7 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
             embed.set_author(name=msg.author.name, icon_url=msg.author.avatar_url)
             embed.timestamp = datetime.datetime.utcnow()
             embeds = []
-            if attachments:
-                if len(attachments) == 1:
-                    ...
+            # if attachments:
+            #     if len(attachments) == 1:
+            #         ...
+            await channel.send(embed=embed)
