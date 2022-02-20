@@ -99,7 +99,7 @@ class Red(
         self.rpc_enabled = cli_flags.rpc
         self.rpc_port = cli_flags.rpc_port
         self._last_exception = None
-        self._session = aiohttp.ClientSession()
+        self.session: aiohttp.ClientSession
         self._config.register_global(
             token=None,
             prefix=[],
@@ -1108,6 +1108,7 @@ class Red(
         """
         This should only be run once, prior to logging in to Discord REST API.
         """
+        self.session = aiohttp.ClientSession()
         await self._maybe_update_config()
         self.description = await self._config.description()
 
