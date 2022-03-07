@@ -113,6 +113,7 @@ class Dev(commands.Cog):
             "_": self._last_result,
             "__name__": "__main__",
             "in_dir": lambda item, search: [x for x in dir(item) if search in x],
+            "reply": ctx.message.reference,
         }
         for name, value in self.env_extensions.items():
             try:
