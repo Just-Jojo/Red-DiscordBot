@@ -1,1 +1,1 @@
-from .hell import setup
+from .hell import setup, teardown
