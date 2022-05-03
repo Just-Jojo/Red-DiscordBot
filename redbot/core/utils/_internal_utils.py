@@ -32,6 +32,7 @@ from typing import (
 import aiohttp
 import discord
 import pkg_resources
+from discord.ext.commands import check
 from discord.ext.commands.converter import get_converter  # DEP-WARN
 from fuzzywuzzy import fuzz, process
 from rich.progress import ProgressColumn
@@ -61,6 +62,7 @@ __all__ = (
     "RichIndefiniteBarColumn",
     "cli_level_to_log_level",
     "get_converter",
+    "is_sudo_enabled",
 )
 
 _T = TypeVar("_T")
@@ -373,3 +375,12 @@ def cli_level_to_log_level(level: int) -> int:
     else:
         log_level = TRACE
     return log_level
+
+
+def is_sudo_enabled():
+    """Deny the command if sudo mechanic is not enabled."""
+
+    async def predicate(ctx):
+        return ctx.bot._sudo_ctx_var is not None
+
+    return check(predicate)

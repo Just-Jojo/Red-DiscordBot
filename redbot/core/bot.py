@@ -1,4 +1,5 @@
 import asyncio
+import aiohttp
 import inspect
 import logging
 import os
@@ -9,6 +10,8 @@ import contextlib
 import weakref
 import functools
 from collections import namedtuple
+from contextvars import ContextVar
+from copy import copy
 from datetime import datetime
 from enum import IntEnum
 from importlib.machinery import ModuleSpec
@@ -20,6 +23,7 @@ from typing import (
     Iterable,
     Dict,
     NoReturn,
+    FrozenSet,
     Set,
     TypeVar,
     Callable,
@@ -95,6 +99,7 @@ class Red(
         self.rpc_enabled = cli_flags.rpc
         self.rpc_port = cli_flags.rpc_port
         self._last_exception = None
+        self.session: aiohttp.ClientSession = None
         self._config.register_global(
             token=None,
             prefix=[],
@@ -106,8 +111,10 @@ class Red(
             regional_format=None,
             embeds=True,
             color=15158332,
+            sudotime=15 * 60,  # 15 minutes default
             fuzzy=False,
             custom_info=None,
+            ping_info=False,
             help__page_char_limit=1000,
             help__max_pages_in_guild=2,
             help__delete_delay=0,
@@ -133,6 +140,7 @@ class Red(
             schema_version=0,
             datarequests__allow_user_requests=True,
             datarequests__user_requests_are_strict=True,
+            dm_log_channel=None,
         )
 
         self._config.register_guild(
@@ -178,15 +186,10 @@ class Red(
 
         async def prefix_manager(bot, message) -> List[str]:
             prefixes = await self._prefix_cache.get_prefixes(message.guild)
-            if cli_flags.mentionable:
-                return when_mentioned_or(*prefixes)(bot, message)
-            return prefixes
+            return when_mentioned_or(*prefixes)(bot, message)
 
         if "command_prefix" not in kwargs:
             kwargs["command_prefix"] = prefix_manager
-
-        if "owner_id" in kwargs:
-            raise RuntimeError("Red doesn't accept owner_id kwarg, use owner_ids instead.")
 
         if "intents" not in kwargs:
             intents = discord.Intents.all()
@@ -194,19 +197,42 @@ class Red(
                 setattr(intents, intent_name, False)
             kwargs["intents"] = intents
 
-        self._owner_id_overwrite = cli_flags.owner
+        # This keeps track of owners with elevated privileges in the different contexts.
+        # This is `None` if sudo functionality is disabled.
+        self._sudo_ctx_var: Optional[ContextVar] = None
+
+        if "owner_id" in kwargs:
+            raise RuntimeError("Red doesn't accept owner_id kwarg, use owner_ids instead.")
+
+        # This is owner ID overwrite, which when set is used *instead of* owner of a non-team app.
+        # For teams, it is just appended to the set of all owner IDs.
+        # This is set to `--owner` *or* if the flag is not passed, to `self._config.owner()`
+        self._owner_id_overwrite: Optional[int] = cli_flags.owner
+        # These are IDs of ALL owners, whether they currently have elevated privileges or not
+        self._all_owner_ids: FrozenSet[int] = frozenset()
+        # These are IDs of the owners, that currently have their privileges elevated globally.
+        # If sudo functionality is not enabled, this will remain empty throughout bot's lifetime.
+        self._elevated_owner_ids: FrozenSet[int] = frozenset()
 
         if "owner_ids" in kwargs:
-            kwargs["owner_ids"] = set(kwargs["owner_ids"])
-        else:
-            kwargs["owner_ids"] = set()
-        kwargs["owner_ids"].update(cli_flags.co_owner)
+            self._all_owner_ids = frozenset(kwargs.pop("owner_ids"))
+        self._all_owner_ids = self._all_owner_ids.union(cli_flags.co_owner)
+        self._elevated_owner_ids = self._all_owner_ids
+
+        # ensure that d.py doesn't run into AttributeError when trying to set `self.owner_ids`
+        # See documentation of `owner_ids`'s setter for more information.
+        kwargs["owner_ids"] = self._all_owner_ids
+
+        # to prevent multiple calls to app info during startup
+        self._app_info = None
 
         if "command_not_found" not in kwargs:
             kwargs["command_not_found"] = "Command {} not found.\n{}"
 
         if "allowed_mentions" not in kwargs:
-            kwargs["allowed_mentions"] = discord.AllowedMentions(everyone=False, roles=False)
+            kwargs["allowed_mentions"] = discord.AllowedMentions(
+                everyone=False, roles=False, replied_user=False
+            )
 
         message_cache_size = cli_flags.message_cache_size
         if cli_flags.no_message_cache:
@@ -220,9 +246,12 @@ class Red(
         self._main_dir = bot_dir
         self._cog_mgr = CogManager()
         self._use_team_features = cli_flags.use_team_features
-        # to prevent multiple calls to app info during startup
-        self._app_info = None
+
         super().__init__(*args, help_command=None, **kwargs)
+
+        # Turns out that draper was smart
+        if cli_flags.enable_sudo:
+            self._sudo_ctx_var = ContextVar("SudoOwners")
         # Do not manually use the help formatter attribute here, see `send_help_for`,
         # for a documented API. The internals of this object are still subject to change.
         self._help_formatter = commands.help.RedHelpFormatter()
@@ -233,6 +262,43 @@ class Red(
         self._red_before_invoke_objs: Set[PreInvokeCoroutine] = set()
 
         self._deletion_requests: MutableMapping[int, asyncio.Lock] = weakref.WeakValueDictionary()
+
+    @property
+    def all_owner_ids(self) -> FrozenSet[int]:
+        """
+        IDs of ALL owners regardless of their elevation status.
+
+        If you're doing privilege checks, use `owner_ids` instead.
+        This attribute is meant to be used for things
+        that actually need to get a full list of owners for informational purposes.
+
+        Example
+        -------
+        `send_to_owners()` uses this property to be able to send message to
+        all bot owners, not just the ones that are currently using elevated permissions.
+        """
+        return self._all_owner_ids
+
+    @property
+    def owner_ids(self) -> FrozenSet[int]:
+        """
+        IDs of owners that are elevated in current context.
+
+        You should NEVER try to set to this attribute.
+
+        This should be used for any privilege checks.
+        If sudo functionality is disabled, this will be equivalent to `all_owner_ids`.
+        """
+        if self._sudo_ctx_var is None:
+            return self._all_owner_ids
+        return self._sudo_ctx_var.get(self._elevated_owner_ids)
+
+    @owner_ids.setter
+    def owner_ids(self, value) -> NoReturn:
+        # this `if` is needed so that d.py's __init__ can "set" to `owner_ids` successfully
+        if self._sudo_ctx_var is None and self._all_owner_ids is value:
+            return  # type: ignore[misc]
+        raise AttributeError("can't set attribute")
 
     def set_help_formatter(self, formatter: commands.help.HelpFormatterABC):
         """
@@ -1080,6 +1146,7 @@ class Red(
         """
         This should only be run once, prior to logging in to Discord REST API.
         """
+        self.session = aiohttp.ClientSession()
         await self._maybe_update_config()
         self.description = await self._config.description()
         self._color = discord.Colour(await self._config.color())
@@ -1090,7 +1157,7 @@ class Red(
         if self._owner_id_overwrite is None:
             self._owner_id_overwrite = await self._config.owner()
         if self._owner_id_overwrite is not None:
-            self.owner_ids.add(self._owner_id_overwrite)
+            self._all_owner_ids |= {self._owner_id_overwrite}
 
         i18n_locale = await self._config.locale()
         i18n.set_locale(i18n_locale)
@@ -1103,8 +1170,7 @@ class Red(
         """
         await self.add_cog(Core(self))
         await self.add_cog(CogManagerUI())
-        if self._cli_flags.dev:
-            await self.add_cog(Dev())
+        await self.add_cog(Dev())
 
         await modlog._init(self)
         await bank._init()
@@ -1154,6 +1220,7 @@ class Red(
         elif last_system_info["system"] != system:
             await self._config.last_system_info.system.set(system)
             system_changed = True
+        self._elevated_owner_ids = self.all_owner_ids
 
         if system_changed and not python_version_changed:
             asyncio.create_task(
@@ -1209,13 +1276,13 @@ class Red(
 
         if app_info.team:
             if self._use_team_features:
-                self.owner_ids.update(m.id for m in app_info.team.members)
+                self._all_owner_ids |= {m.id for m in app_info.team.members}
         elif self._owner_id_overwrite is None:
-            self.owner_ids.add(app_info.owner.id)
+            self._all_owner_ids |= {app_info.owner.id}
 
         self._app_info = app_info
 
-        if not self.owner_ids:
+        if not self._all_owner_ids:
             raise _NoOwnerSet("Bot doesn't have any owner set!")
 
     async def start(self, token: str) -> None:
@@ -1551,21 +1618,23 @@ class Red(
         messages,  without the overhead of additional get_context calls
         per cog.
         """
-        if not message.author.bot:
-            ctx = await self.get_context(message)
-            if ctx.invoked_with and isinstance(message.channel, discord.PartialMessageable):
-                log.warning(
-                    "Discarded a command message (ID: %s) with PartialMessageable channel: %r",
-                    message.id,
-                    message.channel,
-                )
-            else:
-                await self.invoke(ctx)
-        else:
-            ctx = None
+        if self._sudo_ctx_var is not None:
+            # we need to ensure that ctx var is set to actual value
+            # rather than rely on the default that can change at any moment
+            token = self._sudo_ctx_var.set(self.owner_ids)
 
-        if ctx is None or ctx.valid is False:
-            self.dispatch("message_without_command", message)
+        try:
+            if not message.author.bot:
+                ctx = await self.get_context(message)
+                await self.invoke(ctx)
+            else:
+                ctx = None
+
+            if ctx is None or ctx.valid is False:
+                self.dispatch("message_without_command", message)
+        finally:
+            if self._sudo_ctx_var is not None:
+                self._sudo_ctx_var.reset(token)
 
     @staticmethod
     def list_packages():
@@ -1786,6 +1855,16 @@ class Red(
                 if permissions_not_loaded:
                     subcommand.requires.ready_event.set()
 
+    def remove_and_add_command(self, func: commands.Command):
+        """Removes a command and adds the command back.
+
+        Raises
+        ------
+        See :meth:`add_command` and :meth:`remove_command`
+        """
+        self.remove_command(func.name)
+        self.add_command(func)
+
     def remove_command(self, name: str, /) -> Optional[commands.Command]:
         command = super().remove_command(name)
         if command is None:
@@ -1884,7 +1963,7 @@ class Red(
         await self.wait_until_red_ready()
         destinations = []
         opt_outs = await self._config.owner_opt_out_list()
-        for user_id in self.owner_ids:
+        for user_id in self.all_owner_ids:
             if user_id not in opt_outs:
                 user = self.get_user(user_id)
                 if user and not user.bot:  # user.bot is possible with flags and teams
@@ -1982,6 +2061,7 @@ class Red(
             launcher sees this, it will attempt to restart the bot.
 
         """
+        await self.session.close()
         if not restart:
             self._shutdown_mode = ExitCodes.SHUTDOWN
         else:

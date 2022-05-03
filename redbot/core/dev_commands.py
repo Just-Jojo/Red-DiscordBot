@@ -112,6 +112,8 @@ class Dev(commands.Cog):
             "commands": commands,
             "_": self._last_result,
             "__name__": "__main__",
+            "in_dir": lambda item, search: [x for x in dir(item) if search in x],
+            "reply": ctx.message.reference,
         }
         for name, value in self.env_extensions.items():
             try:
@@ -151,9 +153,11 @@ class Dev(commands.Cog):
             compiled = self.async_compile(code, "<string>", "eval")
             result = await self.maybe_await(eval(compiled, env))
         except SyntaxError as e:
+            await ctx.tick(cross=True)
             await ctx.send_interactive(self.get_syntax_error(e), box_lang="py")
             return
         except Exception as e:
+            await ctx.tick(cross=True)
             await ctx.send_interactive(
                 self.get_pages("{}: {!s}".format(type(e).__name__, e)), box_lang="py"
             )
@@ -165,9 +169,9 @@ class Dev(commands.Cog):
         await ctx.tick()
         await ctx.send_interactive(self.get_pages(result), box_lang="py")
 
-    @commands.command(name="eval")
+    @commands.command(name="eval", usage="<body or file>")
     @checks.is_owner()
-    async def _eval(self, ctx, *, body: str):
+    async def _eval(self, ctx, *, body: str = None):
         """Execute asynchronous code.
 
         This command wraps code into the body of an async function and then
@@ -187,6 +191,17 @@ class Dev(commands.Cog):
             commands - redbot.core.commands
             _        - The result of the last dev command.
         """
+        if body is None and not ctx.message.attachments:
+            raise commands.UserInputError
+        elif ctx.message.attachments:
+            atta = ctx.message.attachments[0]
+            try:
+                maybe_body = (await atta.read()).decode()
+            except Exception:
+                if not body:
+                    raise commands.UserInputError
+            else:
+                body = maybe_body
         env = self.get_environment(ctx)
         body = self.cleanup_code(body)
         stdout = io.StringIO()
@@ -197,6 +212,7 @@ class Dev(commands.Cog):
             compiled = self.async_compile(to_compile, "<string>", "exec")
             exec(compiled, env)
         except SyntaxError as e:
+            await ctx.tick(cross=True)
             return await ctx.send_interactive(self.get_syntax_error(e), box_lang="py")
 
         func = env["func"]
@@ -205,6 +221,7 @@ class Dev(commands.Cog):
             with redirect_stdout(stdout):
                 result = await func()
         except:
+            await ctx.tick(cross=True)
             printed = "{}{}".format(stdout.getvalue(), traceback.format_exc())
         else:
             printed = stdout.getvalue()
@@ -261,6 +278,10 @@ class Dev(commands.Cog):
 
             if cleaned in ("quit", "exit", "exit()"):
                 await ctx.send(_("Exiting."))
+                try:
+                    await response.add_reaction("\N{WHITE HEAVY CHECK MARK}")
+                except discord.Forbidden:
+                    pass
                 del self.sessions[ctx.channel.id]
                 return
 
@@ -294,9 +315,17 @@ class Dev(commands.Cog):
                         result = executor(code, env)
                     result = await self.maybe_await(result)
             except:
+                try:
+                    await response.add_reaction("\N{CROSS MARK}")
+                except discord.Forbidden:
+                    pass
                 value = stdout.getvalue()
                 msg = "{}{}".format(value, traceback.format_exc())
             else:
+                try:
+                    await response.add_reaction("\N{WHITE HEAVY CHECK MARK}")
+                except discord.Forbidden:
+                    pass
                 value = stdout.getvalue()
                 if result is not None:
                     msg = "{}{}".format(value, result)
@@ -341,6 +370,7 @@ class Dev(commands.Cog):
         msg.content = ctx.prefix + command
 
         ctx.bot.dispatch("message", msg)
+        await ctx.tick()
 
     @commands.command(name="mockmsg")
     @checks.is_owner()
