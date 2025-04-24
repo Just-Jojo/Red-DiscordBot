@@ -164,7 +164,11 @@ class DevOutput:
         return sanitize_output(self.ctx, "".join(output))
 
     async def send(self, *, tick: bool = True) -> None:
-        await self.ctx.send_interactive(get_pages(str(self)), box_lang="py")
+        try:
+            await self.ctx.send_interactive(get_pages(str(self)), box_lang="py")
+        except Exception as exc:
+            self.set_exception(exc=exc)
+            await self.ctx.send_interactive(get_pages(str(self)), box_lang="py")
         if tick and not self.formatted_exc:
             await self.ctx.tick()
 
